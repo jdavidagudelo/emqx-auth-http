@@ -30,7 +30,7 @@
 init({AuthReq, SuperReq}) ->
     {ok, #{auth_req => AuthReq, super_req => SuperReq}}.
 
-check(#{username := Username}, Password, _Env) when ?UNDEFINED(Username); ?UNDEFINED(Password) ->
+check(#{username := Username}, Password, _Env) when ?UNDEFINED(Username) ->
     {error, username_or_password_undefined};
 
 check(Credentials, Password, #{auth_req := #http_request{method = Method, url = Url, params = Params},
