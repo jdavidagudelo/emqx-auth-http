@@ -16,4 +16,6 @@ cover/
 ct.coverdata
 eunit.coverdata
 logs/
-*.idea
+erlang.mk
+_build/
+rebar.lock

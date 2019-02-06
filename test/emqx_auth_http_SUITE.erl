@@ -37,10 +37,44 @@ groups() ->
     ]}].
 
 init_per_suite(Config) ->
-    DataDir = proplists:get_value(data_dir, Config),
     http_auth_server:start_http(),
-    [start_apps(App, DataDir) || App <- [emqx, emqx_auth_http, emqx_retainer]],
+    [start_apps(App, {SchemaFile, ConfigFile}) ||
+      {App, SchemaFile, ConfigFile}
+        <- [{emqx, local_path("deps/emqx/priv/emqx.schema"),
+                   local_path("deps/emqx/etc/emqx.conf")},
+            {emqx_auth_http, local_path("priv/emqx_auth_http.schema"),
+                             local_path("etc/emqx_auth_http.conf")},
+            {emqx_retainer, local_path("deps/emqx_retainer/priv/emqx_retainer.schema"),
+                            local_path("deps/emqx_retainer/etc/emqx_retainer.conf")}]],
     Config.
+
+get_base_dir() ->
+    {file, Here} = code:is_loaded(?MODULE),
+    filename:dirname(filename:dirname(Here)).
+
+local_path(RelativePath) ->
+    filename:join([get_base_dir(), RelativePath]).
+
+start_apps(App, {SchemaFile, ConfigFile}) ->
+    read_schema_configs(App, {SchemaFile, ConfigFile}),
+    set_special_configs(App),
+    application:ensure_all_started(App).
+
+read_schema_configs(App, {SchemaFile, ConfigFile}) ->
+    ct:pal("Read configs - SchemaFile: ~p, ConfigFile: ~p", [SchemaFile, ConfigFile]),
+    Schema = cuttlefish_schema:files([SchemaFile]),
+    Conf = conf_parse:file(ConfigFile),
+    NewConfig = cuttlefish_generator:map(Schema, Conf),
+    Vals = proplists:get_value(App, NewConfig, []),
+    [application:set_env(App, Par, Value) || {Par, Value} <- Vals].
+
+set_special_configs(emqx) ->
+    application:set_env(emqx, allow_anonymous, false),
+    application:set_env(emqx, enable_acl_cache, false),
+    application:set_env(emqx, plugins_loaded_file,
+                        local_path("deps/emqx/test/emqx_SUITE_data/loaded_plugins"));
+set_special_configs(_App) ->
+    ok.
 
 end_per_suite(_Config) ->
     http_auth_server:stop_http(),
@@ -94,16 +128,18 @@ check_auth(_) ->
 
 sub_pub(_) ->
     ct:pal("start client"),
-    {ok, T1, _} = emqx_client:start_link([{host, "localhost"},
-                                          {client_id, <<"client1">>},
-                                          {username, <<"testuser1">>},
-                                          {password, <<"pass1">>}]),
+    {ok, T1} = emqx_client:start_link([{host, "localhost"},
+                                       {client_id, <<"client1">>},
+                                       {username, <<"testuser1">>},
+                                       {password, <<"pass1">>}]),
+    {ok, _} = emqx_client:connect(T1),
     emqx_client:publish(T1, <<"topic">>, <<"body">>, [{qos, 0}, {retain, true}]),
     timer:sleep(1000),
-    {ok, T2, _} = emqx_client:start_link([{host, "localhost"},
-                                          {client_id, <<"client2">>},
-                                          {username, <<"testuser2">>},
-                                          {password, <<"pass2">>}]),
+    {ok, T2} = emqx_client:start_link([{host, "localhost"},
+                                       {client_id, <<"client2">>},
+                                       {username, <<"testuser2">>},
+                                       {password, <<"pass2">>}]),
+    {ok, _} = emqx_client:connect(T2),
     emqx_client:subscribe(T2, <<"topic">>),
     receive
         {publish, _Topic, Payload} ->
@@ -118,7 +154,7 @@ server_config(_) ->
             {params,[{"clientid","%c"},
                      {"username","%u"}
                      ]}],
-    Acl = [{url,"http://127.0.0.1:8090/mqtt/acl"},
+    Acl = [{url,"http://127.0.0.1:8991/mqtt/acl"},
                            {method,post},
                            {params,[{"access","%A"},
                                     {"username","%u"},
@@ -156,11 +192,3 @@ comment_config(_) ->
     application:start(?APP),
     ?assertEqual([], emqx_access_control:lookup_mods(auth)),
     ?assertEqual([], emqx_access_control:lookup_mods(acl)).
-
-start_apps(App, DataDir) ->
-    Schema = cuttlefish_schema:files([filename:join([DataDir, atom_to_list(App) ++ ".schema"])]),
-    Conf = conf_parse:file(filename:join([DataDir, atom_to_list(App) ++ ".conf"])),
-    NewConfig = cuttlefish_generator:map(Schema, Conf),
-    Vals = proplists:get_value(App, NewConfig),
-    [application:set_env(App, Par, Value) || {Par, Value} <- Vals],
-    application:ensure_all_started(App).
