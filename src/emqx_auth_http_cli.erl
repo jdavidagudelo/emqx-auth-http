@@ -1,4 +1,4 @@
-%% Copyright (c) 2018 EMQ Technologies Co., Ltd. All Rights Reserved.
+%% Copyright (c) 2013-2019 EMQ Technologies Co., Ltd. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 
 -include_lib("emqx/include/emqx.hrl").
 
--export([request/3, feedvar/2, feedvar/3]).
+-export([ request/3
+        , feedvar/2
+        , feedvar/3
+        ]).
 
 %%--------------------------------------------------------------------
 %% HTTP Request
@@ -65,10 +68,12 @@ bin(Binary) when is_binary(Binary) ->
 %% Feed Variables
 %%--------------------------------------------------------------------
 
-feedvar(Params, _Credentials = #{username := Username, client_id := ClientId, peername := {IpAddr, _}}) ->
+feedvar(Params, Credentials = #{username := Username, client_id := ClientId, peername := {IpAddr, _}}) ->
     lists:map(fun({Param, "%u"}) -> {Param, Username};
                  ({Param, "%c"}) -> {Param, ClientId};
                  ({Param, "%a"}) -> {Param, inet:ntoa(IpAddr)};
+                 ({Param, "%cn"}) -> {Param, maps:get(cn, Credentials, undefined)};
+                 ({Param, "%dn"}) -> {Param, maps:get(dn, Credentials, undefined)};
                  ({Param, Var})  -> {Param, Var}
               end, Params).
 
@@ -78,3 +83,4 @@ feedvar(Params, Var, Val) ->
                  ({Param, Var0}) ->
                       {Param, Var0}
               end, Params).
+

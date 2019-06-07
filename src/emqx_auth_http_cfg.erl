@@ -1,4 +1,4 @@
-%% Copyright (c) 2018 EMQ Technologies Co., Ltd. All Rights Reserved.
+%% Copyright (c) 2013-2019 EMQ Technologies Co., Ltd. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 -include("emqx_auth_http.hrl").
 
--export ([register/0, unregister/0]).
+-export([ register/0
+        , unregister/0
+        ]).
 
 register() ->
     clique_config:load_schema([code:priv_dir(?APP)], ?APP),
